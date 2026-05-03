@@ -1,0 +1,132 @@
+
+-- Keyblinds
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then
+        return
+    end
+
+    local keyCodes = {
+        {Enum.KeyCode.One, Enum.KeyCode.DPadUp},
+        {Enum.KeyCode.Two, Enum.KeyCode.DPadLeft},  
+        {Enum.KeyCode.Three, Enum.KeyCode.DPadDown},
+        {Enum.KeyCode.Four, Enum.KeyCode.DPadRight},
+        {Enum.KeyCode.Five, Enum.KeyCode.Thumbstick2}  
+    }
+
+    for i, keys in ipairs(keyCodes) do
+        if table.find(keys, input.KeyCode) then
+            local playerData = getDataFunction:InvokeServer()
+            local towerName = playerData.SelectedTowers[i]
+
+            if towerName then
+                local tower = towers:FindFirstChild(towerName)
+                if tower then
+                    local allowedToSpawn = requestTowerFunction:InvokeServer(tower.Name)
+                    if allowedToSpawn then
+                        AddPlaceholderTower(tower.Name)
+                    end
+                end
+            end
+            return
+        end
+    end
+
+    -- SELECTION LOGIC
+    if towerToSpawn then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            SpawnNewTower()
+        elseif input.UserInputType == Enum.UserInputType.Touch then
+            local timeSinceLastTouch = tick() - lastTouch
+            if timeSinceLastTouch <= 0.25 then
+                SpawnNewTower()
+            end
+            lastTouch = tick()
+        elseif input.KeyCode == Enum.KeyCode.R then
+            rotation += 90
+        elseif input.KeyCode == Enum.KeyCode.X or input.KeyCode == Enum.KeyCode.C then
+            RemovePlaceholderTower()
+        end
+    elseif hoveredInstance and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        local model = hoveredInstance:FindFirstAncestorOfClass("Model")
+        
+        if model and model.Parent == workspace.Towers then
+            selectedTower = model
+        else
+            selectedTower = nil
+        end
+        
+        toggleTowerInfo()
+    end
+end)
+
+-- SetupGameGui
+
+local function SetupGameGui()
+	if not info.GameRunning.Value then
+		return
+	end
+	
+	gui.Voting.Visible = false
+	gui.Info.Health.Visible = true
+	gui.Info.Stats.Visible = true
+	gui.Towers.Visible = true
+	
+	local map = workspace.Map:FindFirstChildOfClass("Folder")
+	if map then
+		health.Setup(map:WaitForChild("Base"), gui.Info.Health)
+	else
+		workspace.Map.ChildAdded:Connect(function(newMap)
+			health.Setup(newMap:WaitForChild("Base"), gui.Info.Health)
+		end)
+	end
+
+	workspace.Mobs.ChildAdded:Connect(function(mob)
+		health.Setup(mob)
+	end)
+
+	info.Wave.Changed:Connect(function(change)
+		gui.Info.Stats.Wave.Text = "Wave:" .. change
+	end)
+
+	gold.Changed:Connect(function(change)
+		gui.Info.Stats.Gold.Text = "$" .. gold.Value
+	end)
+	gui.Info.Stats.Gold.Text = "$" .. gold.Value
+
+	gui.Towers.Title.Text = "Towers: " .. placedTowers .. "/" .. maxTowers
+
+	-- Changes here
+
+	local playerData = getDataFunction:InvokeServer()
+	local selectedTowers = playerData.SelectedTowers
+
+	for i = 1, 5 do
+		local button = gui.Towers:FindFirstChild(tostring(i))
+		if not button then continue end
+
+		if button:FindFirstChild("Count") then
+			button.Count.Text = tostring(i)
+		end
+
+		local towerName = selectedTowers[i]
+		local tower = towerName and towers:FindFirstChild(towerName)
+
+		if tower then
+			local config = tower:WaitForChild("Config")
+
+			button:SetAttribute("TowerName", tower.Name)
+			button.Visible = true
+
+			button.Activated:Connect(function()
+				local allowedToSpawn = requestTowerFunction:InvokeServer(tower.Name)
+				if allowedToSpawn then
+					AddPlaceholderTower(tower.Name)
+				end
+			end)
+		else
+			button.Price.Text = "Empty"
+			button:SetAttribute("TowerName", "")
+		end
+	end
+end

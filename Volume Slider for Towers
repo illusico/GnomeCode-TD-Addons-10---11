@@ -1,0 +1,79 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local Mouse = Players.LocalPlayer:GetMouse()
+local Slider = script.Parent
+local Fill = script.Parent:WaitForChild("Fill")
+local Trigger = script.Parent:WaitForChild("Trigger")
+local OutputValue = script.Parent:WaitForChild("OutputValue")
+local OutputLabel = script.Parent:WaitForChild("Label")
+
+local TowersFolder = workspace:WaitForChild("Towers")
+
+local MaxValue = 1
+local StartingValue = 0
+local TweenStyle = TweenInfo.new(0.25, Enum.EasingStyle.Exponential)
+
+local function applyVolumeToTower(tower, volume)
+	local root = tower:FindFirstChild("HumanoidRootPart")
+	if root then
+		local soundGroup = root:FindFirstChild("Tower_Sounds")
+		if soundGroup and soundGroup:IsA("SoundGroup") then
+			soundGroup.Volume = volume
+			
+			for _, obj in ipairs(tower:GetDescendants()) do
+				if obj:IsA("Sound") then
+					obj.SoundGroup = soundGroup
+				end
+			end
+		end
+	end
+end
+
+local function updateAllTowers(volume)
+	for _, tower in ipairs(TowersFolder:GetChildren()) do
+		applyVolumeToTower(tower, volume)
+	end
+end
+
+function UpdateSlider()
+	local output = math.clamp((Mouse.X - Slider.AbsolutePosition.X) / Slider.AbsoluteSize.X, 0, 1)
+	
+	local outputClamped = StartingValue + (output * (MaxValue - StartingValue))
+
+	if OutputValue.Value ~= outputClamped then
+		TweenService:Create(Fill, TweenStyle, {Size = UDim2.fromScale(output, 1)}):Play()
+		
+		updateAllTowers(outputClamped)
+	end
+
+	OutputValue.Value = outputClamped
+	OutputLabel.Text = tostring(math.round(OutputValue.Value * 100))
+end
+
+TowersFolder.ChildAdded:Connect(function(newTower)
+	task.wait(0.1) 
+	applyVolumeToTower(newTower, OutputValue.Value)
+end)
+
+local sliderActive = false
+
+function ActivateSlider()
+	sliderActive = true
+	while sliderActive do
+		UpdateSlider()
+		task.wait()
+	end
+end
+
+Trigger.MouseButton1Down:Connect(ActivateSlider)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		sliderActive = false
+	end
+end)
+
+Fill.Size = UDim2.fromScale((OutputValue.Value - StartingValue) / (MaxValue - StartingValue), 1)
+OutputLabel.Text = tostring(math.round(OutputValue.Value * 100))
